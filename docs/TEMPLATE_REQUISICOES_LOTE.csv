@@ -1,3 +1,0 @@
-businessUnit,requesterEmail,itemNumber,quantity,price,ticket,accountNumber,costCenter,project,financialClass,supplierCode,supplierCNPJ,supplierName,supplierSite,description,needByDate,uom
-V30326 TRINITA,camila.americo@bild.com.br,SVA20035,1,12400.4,ZEEV-001,32102040021,CC0091,PV0508,CF001,65007,31303450000187,FORNECEDOR LTDA,31303450000187,Descrição customizada do item,2025-11-30,UN
-V30326 TRINITA,camila.americo@bild.com.br,SVA20035,2,10500.0,ZEEV-002,32102040021,CC0091,PV0508,,65007,,,,,2025-12-15,UN
