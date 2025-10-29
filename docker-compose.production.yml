@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  app:
+    image: bildpurchase/bild-purchase-requisitions:latest
+    container_name: bild-purchase-api
+    ports:
+      - "3000:3000"
+    environment:
+      # Oracle Fusion Configuration
+      - FUSION_BASE_URL=${FUSION_BASE_URL}
+      - FUSION_REST_VERSION=${FUSION_REST_VERSION:-11.13.18.05}
+      - FUSION_USERNAME=${FUSION_USERNAME}
+      - FUSION_PASSWORD=${FUSION_PASSWORD}
+      
+      # Application Configuration
+      - NODE_ENV=production
+      - PORT=3000
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      
+      # Database (opcional - se usar PostgreSQL)
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_DATABASE=${DB_DATABASE}
+      
+      # Redis (opcional - se usar Redis)
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+    volumes:
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/observability/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
