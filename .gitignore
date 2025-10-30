@@ -4,6 +4,15 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Documentation (keep essential docs)
+docs/LICOES_APRENDIDAS_ORACLE_FUSION_API.md
+docs/GUIA_DEPLOY_CLIENTE.md
+docs/GUIA_UPLOAD_ARQUIVO_LOTE.md
+docs/RELATORIO_TECNICO_CLIENTE.md
+docs/TEMPLATE_REQUISICOES_LOTE.csv
+docs/*.json
+docs/*.pdf
+
 # Runtime data
 pids
 *.pid
@@ -32,6 +41,7 @@ build/Release
 # Dependency directories
 node_modules/
 docs/
+scripts/
 jspm_packages/
 
 # TypeScript cache

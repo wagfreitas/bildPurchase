@@ -4,11 +4,14 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
+import { FileLoggerService } from './common/logging/file-logger.service';
+import { LoggingInterceptor } from './common/logging/logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
   const logger = new Logger('Bootstrap');
+  const fileLogger = new FileLoggerService();
 
   // Validaçao Global
   app.useGlobalPipes(
@@ -37,6 +40,9 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
+
+  // File-based logging interceptor (JSON lines in logs/app.log)
+  app.useGlobalInterceptors(new LoggingInterceptor(fileLogger));
 
   // Debug endpoint
   app.use('/debug', (req, res) => {
