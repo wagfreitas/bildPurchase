@@ -4,7 +4,11 @@ import { join } from 'path';
 
 @Injectable()
 export class FileLoggerService {
-  private readonly logDir = join(process.cwd(), 'logs');
+  // Em ambientes serverless (AWS Lambda), apenas /tmp é gravável.
+  // Se LAMBDA_TASK_ROOT existir, direcionamos logs para /tmp/logs.
+  private readonly logDir = process.env.LAMBDA_TASK_ROOT
+    ? '/tmp/logs'
+    : join(process.cwd(), 'logs');
   private readonly logFile = join(this.logDir, 'app.log');
 
   constructor() {

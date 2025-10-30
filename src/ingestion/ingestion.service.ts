@@ -4,7 +4,6 @@ import * as path from 'path';
 import * as csv from 'csv-parser';
 import * as ExcelJS from 'exceljs';
 import { RequisitionDTO, RequisitionLineDTO } from '../fusion/dto/requisition.dto';
-import { BatchEntity } from '../storage/entities';
 
 export interface ParsedFileResult {
   requisitions: RequisitionDTO[];
@@ -218,54 +217,7 @@ export class IngestionService {
     return requisition;
   }
 
-  async exportBatchResults(batch: BatchEntity): Promise<Buffer> {
-    this.logger.log(`Exporting batch results for batch ${batch.id}`);
-
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Batch Results');
-
-    // Headers
-    worksheet.columns = [
-      { header: 'Requisition ID', key: 'id', width: 36 },
-      { header: 'Business Unit', key: 'businessUnit', width: 20 },
-      { header: 'Requester', key: 'requester', width: 30 },
-      { header: 'External Reference', key: 'externalReference', width: 25 },
-      { header: 'Fusion Requisition ID', key: 'fusionId', width: 25 },
-      { header: 'Requisition Number', key: 'requisitionNumber', width: 20 },
-      { header: 'Status', key: 'status', width: 15 },
-      { header: 'Submitted', key: 'submitted', width: 10 },
-      { header: 'Error Message', key: 'errorMessage', width: 50 },
-      { header: 'Created At', key: 'createdAt', width: 20 },
-    ];
-
-    // Add data rows
-    if (batch.requisitions) {
-      for (const requisition of batch.requisitions) {
-        worksheet.addRow({
-          id: requisition.id,
-          businessUnit: requisition.businessUnit,
-          requester: requisition.requesterUsernameOrEmail,
-          externalReference: requisition.externalReference,
-          fusionId: requisition.fusionRequisitionId,
-          requisitionNumber: requisition.requisitionNumber,
-          status: requisition.status,
-          submitted: requisition.submitted ? 'Yes' : 'No',
-          errorMessage: requisition.errorMessage,
-          createdAt: requisition.createdAt.toISOString(),
-        });
-      }
-    }
-
-    // Style the header row
-    worksheet.getRow(1).font = { bold: true };
-    worksheet.getRow(1).fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFE0E0E0' },
-    };
-
-    return await workbook.xlsx.writeBuffer() as unknown as Buffer;
-  }
+  // exportBatchResults removido (sem BD)
 
   async validateRequisitionData(requisitions: RequisitionDTO[]): Promise<{
     valid: RequisitionDTO[];

@@ -17,6 +17,8 @@ COPY . .
 RUN npm run build
 
 # Production stage
+FROM public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 AS lambda-adapter
+
 FROM node:18-alpine AS production
 
 # Set working directory
@@ -37,16 +39,24 @@ COPY --from=builder /app/package.json ./package.json
 # Create runtime directories
 RUN mkdir -p uploads logs
 
-# Add curl for healthcheck
-RUN apk add --no-cache curl
+# Add curl and CA certs (úteis para healthcheck e outras operações)
+RUN apk add --no-cache curl ca-certificates && update-ca-certificates
+
+# AWS Lambda Web Adapter (permite expor HTTP em Lambda usando container)
+# Copiamos o binário direto do stage lambda-adapter (ECR público da AWS)
+COPY --from=lambda-adapter /lambda-adapter /opt/extensions/aws-lambda-adapter
+RUN chmod +x /opt/extensions/aws-lambda-adapter
+ENV AWS_LWA_ENABLE_COMPRESSION=true
+ENV AWS_LWA_LOG_LEVEL=debug
+ENV PORT=8080
 
 # Expose port
-EXPOSE 3000
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/observability/health || exit 1
+  CMD curl -f http://localhost:8080/observability/health || exit 1
 
-# Start the application
-CMD ["npm", "run", "start:prod"]
+# Start the application diretamente com Node (mais rápido/estável no Lambda)
+CMD ["node", "dist/main"]
 

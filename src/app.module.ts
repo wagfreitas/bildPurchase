@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { FusionModule } from './fusion/fusion.module';
 import { IngestionModule } from './ingestion/ingestion.module';
 import { ProcurementModule } from './procurement/procurement.module';
+import { ObservabilityModule } from './observability/observability.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { ProcurementModule } from './procurement/procurement.module';
     FusionModule,
     IngestionModule,
     ProcurementModule,
+    ObservabilityModule,
   ],
 })
 export class AppModule {}

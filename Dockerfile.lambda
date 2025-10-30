@@ -1,0 +1,35 @@
+# Dockerfile otimizado para AWS Lambda (usando AWS Lambda base image)
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install ALL dependencies
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Build including lambda handler
+RUN npm run build
+
+# Production stage - AWS Lambda Node.js base image
+FROM public.ecr.aws/lambda/nodejs:18
+
+# Copy package files
+COPY package*.json ./
+
+# Install ONLY production dependencies
+RUN npm ci --only=production
+
+# Copy built application
+COPY --from=builder /app/dist ./dist
+
+# Create runtime directories
+RUN mkdir -p uploads logs
+
+# Set the handler (arquivo.função)
+CMD ["dist/lambda.handler"]
+

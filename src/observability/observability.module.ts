@@ -1,13 +1,9 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { ObservabilityService } from './observability.service';
 import { ObservabilityController } from './observability.controller';
-import { BatchEntity, RequisitionEntity } from '../storage/entities';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([BatchEntity, RequisitionEntity]),
-  ],
+  imports: [],
   controllers: [ObservabilityController],
   providers: [ObservabilityService],
   exports: [ObservabilityService],

@@ -53,8 +53,9 @@ async function bootstrap() {
     });
   });
 
-  const port = configService.get('PORT', 3000);
-  await app.listen(port);
+  const port = configService.get('PORT', 8080);
+  // Importante no AWS Lambda Web Adapter: escutar em 0.0.0.0
+  await app.listen(port, '0.0.0.0');
   
   logger.log(`🚀 Application is running on: http://localhost:${port}`);
   logger.log(`📚 Swagger documentation: http://localhost:${port}/docs`);

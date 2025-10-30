@@ -1,4 +1,5 @@
 import { Controller, Post, Body, Get, Param, Query, HttpException, HttpStatus, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -13,6 +14,7 @@ import { createReadStream, unlinkSync } from 'fs';
  * 
  * Endpoints de produção para criar e gerenciar requisições de compras no Oracle Fusion
  */
+@ApiTags('procurement/purchase-requisitions')
 @Controller('procurement/purchase-requisitions')
 export class ProcurementController {
   constructor(
@@ -28,6 +30,35 @@ export class ProcurementController {
    * @returns Purchase Requisition criada
    */
   @Post()
+  @ApiOperation({ summary: 'Criar Purchase Requisition' })
+  @ApiResponse({ status: 201, description: 'Requisição criada com sucesso' })
+  @ApiBody({
+    description: 'Exemplo de payload para criar uma Purchase Requisition',
+    schema: {
+      type: 'object',
+      properties: {
+        businessUnit: { type: 'string', example: 'V30326 TRINITA' },
+        requesterEmail: { type: 'string', example: 'camila.americo@bild.com.br' },
+        itemNumber: { type: 'string', example: 'SVA20035' },
+        quantity: { type: 'number', example: 1 },
+        price: { type: 'string', example: '12400.40' },
+        ticket: { type: 'string', example: 'ZEEV-001' },
+        accountNumber: { type: 'string', example: '32102040021' },
+        costCenter: { type: 'string', example: 'CC0091' },
+        project: { type: 'string', example: 'PV0508' },
+        financialClass: { type: 'string', example: 'CF001' },
+        supplierCode: { type: 'number', example: 65007 },
+        supplierCNPJ: { type: 'string', example: '31303450000187' },
+        supplierName: { type: 'string', example: 'FORNECEDOR LTDA' },
+        supplierSite: { type: 'string', example: '31303450000187' },
+        description: { type: 'string', example: 'Descrição customizada do item' },
+        needByDate: { type: 'string', example: '2025-11-30' },
+        uom: { type: 'string', example: 'UN' },
+        autoSubmit: { type: 'boolean', example: true }
+      },
+      required: ['businessUnit', 'requesterEmail', 'itemNumber', 'quantity', 'price', 'accountNumber', 'costCenter', 'project']
+    }
+  })
   async createPurchaseRequisition(@Body() dto: CreatePurchaseRequisitionDto) {
     try {
       const result = await this.purchaseRequisitionService.createPurchaseRequisition(dto);

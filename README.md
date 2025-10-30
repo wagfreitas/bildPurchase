@@ -10,7 +10,7 @@ API completa para criação e gerenciamento de requisições de compra no Oracle
 - ✅ **DFF (Descriptive Flexfields)**: Preenchimento automático de Centro de Custo e Projeto em "Additional Information" 🆕
 - ✅ **Deliver-To Location**: Suporte completo para LocationId e LocationCode 🆕
 - ⚠️ **Submissão Manual**: Requisições devem ser submetidas manualmente no Oracle UI (API não suportada nesta instância)
-- ✅ **Autenticação OAuth2**: Integração com Oracle IDCS/Identity Domain
+- ✅ **Autenticação Basic**: Usuário e senha do Oracle Fusion (Authorization: Basic)
 - ✅ **Observabilidade**: Logs estruturados em arquivo (JSONL), métricas e health checks
 - ✅ **Idempotência**: Controle de duplicatas via referências externas
 - ✅ **Validação**: Validação completa de dados de entrada
@@ -65,10 +65,9 @@ FUSION_BASE_URL=https://your-instance.oraclecloud.com
 FUSION_REST_VERSION=11.13.18.05
 EXTERNAL_REF_FIELD=ExternalReference
 
-# OAuth2
-OAUTH_TOKEN_URL=https://your-domain.identity.oraclecloud.com/oauth2/v1/token
-OAUTH_CLIENT_ID=your-client-id
-OAUTH_CLIENT_SECRET=your-client-secret
+# Autenticação Basic (Oracle Fusion)
+FUSION_USERNAME=your-fusion-username
+FUSION_PASSWORD=your-fusion-password
 
 # Banco de Dados
 DB_HOST=localhost
@@ -82,14 +81,11 @@ REDIS_HOST=localhost
 REDIS_PORT=6379
 ```
 
-### Configuração OAuth2 no Oracle Fusion
+### Credenciais para Autenticação Basic
 
-1. Acesse o Oracle Cloud Console
-2. Vá para Identity & Security > Identity
-3. Crie uma nova "Confidential Application"
-4. Configure os escopos necessários:
-   - `urn:opc:idm:__myscopes__`
-5. Adicione os privilégios de Procurement REST
+1. Crie/solicite um usuário técnico no Oracle Fusion com permissão de acesso às APIs de Procurement.
+2. Configure `FUSION_USERNAME` e `FUSION_PASSWORD` no `.env`.
+3. Garanta que o usuário possui privilégios para criar e (se habilitado) submeter requisições.
 
 ## 📊 Endpoints Principais
 
@@ -237,7 +233,7 @@ curl -X POST http://localhost:3000/procurement/purchase-requisitions/upload \
 ## 📈 Monitoramento
 
 ### Health Checks
-- **Fusion**: Verificação de autenticação OAuth2
+- **Fusion**: Verificação de autenticação Basic
 
 ### Métricas
 - Total de lotes e requisições processadas
