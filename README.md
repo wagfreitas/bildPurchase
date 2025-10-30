@@ -11,17 +11,16 @@ API completa para criação e gerenciamento de requisições de compra no Oracle
 - ✅ **Deliver-To Location**: Suporte completo para LocationId e LocationCode 🆕
 - ⚠️ **Submissão Manual**: Requisições devem ser submetidas manualmente no Oracle UI (API não suportada nesta instância)
 - ✅ **Autenticação OAuth2**: Integração com Oracle IDCS/Identity Domain
-- ✅ **Observabilidade**: Logs estruturados, métricas e health checks
+- ✅ **Observabilidade**: Logs estruturados em arquivo (JSONL), métricas e health checks
 - ✅ **Idempotência**: Controle de duplicatas via referências externas
 - ✅ **Validação**: Validação completa de dados de entrada
 - ✅ **Documentação**: Swagger UI integrado
-- ✅ **Persistência**: PostgreSQL para controle de estado e auditoria
+ 
 
 ## 📋 Pré-requisitos
 
 - Node.js 18+
-- PostgreSQL 13+
-- Redis 6+
+ 
 - Acesso ao Oracle Fusion com APIs REST habilitadas
 - Aplicação OAuth2 configurada no Oracle IDCS
 
@@ -40,14 +39,7 @@ cp env.example .env
 # Edite o arquivo .env com suas configurações
 ```
 
-### 3. Configure o banco de dados
-```bash
-# Inicie PostgreSQL e Redis
-docker-compose up -d postgres redis
-
-# Execute as migrações (automáticas em desenvolvimento)
-npm run start:dev
-```
+ 
 
 ### 4. Inicie a aplicação
 ```bash
@@ -107,18 +99,7 @@ REDIS_PORT=6379
 - `GET /procurement/purchase-requisitions` - Listar requisições
 - `POST /procurement/purchase-requisitions/:id/submit` - **Submeter para aprovação** ⭐
 
-### Requisições (Legacy)
-- `POST /requisitions` - Criar requisição individual
-- `POST /requisitions/bulk` - Processamento em lote síncrono
-- `GET /requisitions/:id` - Consultar requisição
-- `POST /requisitions/submit` - Submeter para aprovação
-
-### Lotes
-- `POST /batches` - Criar lote a partir de arquivo
-- `GET /batches` - Listar lotes
-- `GET /batches/:id` - Detalhes do lote
-- `GET /batches/:id/metrics` - Métricas do lote
-- `POST /batches/:id/retry` - Reprocessar falhas
+ 
 
 ### Ingestão
 - `POST /ingestion/validate` - Validar arquivo sem processar
@@ -239,59 +220,23 @@ curl -X POST http://localhost:3000/procurement/purchase-requisitions/upload \
 }
 ```
 
-**📥 Template de arquivo:**  
-Disponível em: `docs/TEMPLATE_REQUISICOES_LOTE.csv`
-
-**📚 Guia completo:**  
-Consulte: `docs/GUIA_UPLOAD_ARQUIVO_LOTE.md`
+ 
 
 ---
 
-## 📁 Formato de Arquivo (Sistema Antigo - Batches)
-
-### Template CSV
-```csv
-business_unit,requester,deliver_to_location,external_reference,item_number,description,supplier_number,quantity,unit_price,cost_center,project_number,submit
-BU001,user@company.com,LOC001,REF001,ITEM001,Office Supplies,SUP001,10,25.50,CC001,PROJ001,true
-```
-
-### JSON para API
-```json
-{
-  "businessUnit": "BU001",
-  "requesterUsernameOrEmail": "user@company.com",
-  "deliverToLocation": "LOC001",
-  "externalReference": "REF001",
-  "lines": [
-    {
-      "itemNumber": "ITEM001",
-      "description": "Office Supplies",
-      "supplierNumber": "SUP001",
-      "quantity": 10,
-      "unitPrice": 25.50,
-      "costCenter": "CC001",
-      "projectNumber": "PROJ001"
-    }
-  ],
-  "submit": true
-}
-```
+ 
 
 ## 🔄 Fluxo de Processamento
 
 1. **Upload**: Arquivo CSV/XLSX é enviado via API
 2. **Validação**: Dados são validados e normalizados
-3. **Criação do Lote**: Batch é criado no banco de dados
-4. **Processamento**: Jobs são enfileirados no Redis/BullMQ
-5. **Integração**: Cada requisição é criada no Oracle Fusion
-6. **Submissão**: Requisições são submetidas para aprovação
-7. **Auditoria**: Status e resultados são persistidos
+3. **Integração**: Cada requisição é criada no Oracle Fusion
+4. **Submissão**: Requisições são submetidas para aprovação (quando aplicável)
+5. **Logs**: Todas as requisições e respostas são registradas em `logs/app.log`
 
 ## 📈 Monitoramento
 
 ### Health Checks
-- **Database**: Verificação de conectividade PostgreSQL
-- **Redis**: Verificação de conectividade Redis
 - **Fusion**: Verificação de autenticação OAuth2
 
 ### Métricas
@@ -301,10 +246,8 @@ BU001,user@company.com,LOC001,REF001,ITEM001,Office Supplies,SUP001,10,25.50,CC0
 - Uso de memória e recursos
 
 ### Logs
-- Logs estruturados com Pino
-- Rastreamento de correlação por batch/requisition
-- Logs de API do Fusion com timing
-- Redação automática de dados sensíveis
+- Logs JSONL gravados em `logs/app.log`
+- Interceptor global registra request, response (status, duração) e erros
 
 ## 🧪 Testes
 

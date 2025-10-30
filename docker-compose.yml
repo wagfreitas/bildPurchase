@@ -1,31 +1,6 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: fusion-api-postgres
-    environment:
-      POSTGRES_DB: fusion_requisitions
-      POSTGRES_USER: fusion_api
-      POSTGRES_PASSWORD: fusion_password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - fusion-network
-
-  redis:
-    image: redis:7-alpine
-    container_name: fusion-api-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - fusion-network
-
   app:
     build:
       context: .
@@ -35,40 +10,8 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=development
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USERNAME=fusion_api
-      - DB_PASSWORD=fusion_password
-      - DB_DATABASE=fusion_requisitions
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    depends_on:
-      - postgres
-      - redis
     volumes:
       - ./src:/app/src
       - ./uploads:/app/uploads
-    networks:
-      - fusion-network
-
-  # Optional: Admin interface for Redis
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    container_name: fusion-api-redis-commander
-    environment:
-      - REDIS_HOSTS=local:redis:6379
-    ports:
-      - "8081:8081"
-    depends_on:
-      - redis
-    networks:
-      - fusion-network
-
-volumes:
-  postgres_data:
-  redis_data:
-
-networks:
-  fusion-network:
-    driver: bridge
+      - ./logs:/app/logs
 

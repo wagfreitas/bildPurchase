@@ -34,8 +34,8 @@ COPY --from=builder /app/dist ./dist
 # Copy other necessary files (se houver)
 COPY --from=builder /app/package.json ./package.json
 
-# Create uploads directory
-RUN mkdir -p uploads
+# Create runtime directories
+RUN mkdir -p uploads logs
 
 # Add curl for healthcheck
 RUN apk add --no-cache curl
