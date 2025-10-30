@@ -5,14 +5,14 @@ API completa para criação e gerenciamento de requisições de compra no Oracle
 
 ## 🚀 Funcionalidades
 
-- ✅ **Processamento em Lotes**: Upload de arquivos CSV/XLSX com processamento assíncrono
+- ✅ **Processamento em Lotes**: Upload de arquivos CSV/XLSX para criar múltiplas requisições
 - ✅ **Integração Oracle Fusion**: APIs REST oficiais para criação de requisições
-- ✅ **DFF (Descriptive Flexfields)**: Preenchimento automático de Centro de Custo e Projeto em "Additional Information" 🆕
-- ✅ **Deliver-To Location**: Suporte completo para LocationId e LocationCode 🆕
-- ⚠️ **Submissão Manual**: Requisições devem ser submetidas manualmente no Oracle UI (API não suportada nesta instância)
+- ✅ **DFF (Descriptive Flexfields)**: Preenchimento automático de Centro de Custo, Projeto e Classe Financeira
+- ✅ **Submissão Automática**: Requisições são automaticamente submetidas para aprovação (Content-Type correto para actions)
 - ✅ **Autenticação Basic**: Usuário e senha do Oracle Fusion (Authorization: Basic)
-- ✅ **Observabilidade**: Logs estruturados em arquivo (JSONL), métricas e health checks
-- ✅ **Idempotência**: Controle de duplicatas via referências externas
+- ✅ **Observabilidade**: Logs estruturados em arquivo (JSONL no local, CloudWatch em produção), métricas e health checks
+- ✅ **Serverless Ready**: Handler Lambda com @vendia/serverless-express para deploy em AWS Lambda
+- ✅ **Sem Banco de Dados**: Aplicação stateless, sem dependências de PostgreSQL/Redis
 - ✅ **Validação**: Validação completa de dados de entrada
 - ✅ **Documentação**: Swagger UI integrado
  
@@ -42,14 +42,20 @@ cp env.example .env
  
 
 ### 4. Inicie a aplicação
-```bash
-# Desenvolvimento
-npm run start:dev
 
-# Produção
-npm run build
-npm run start:prod
+**Desenvolvimento local:**
+```bash
+npm run start:dev
 ```
+
+**Produção (Docker):**
+```bash
+docker compose up -d
+```
+
+**Serverless (AWS Lambda):**
+- Use `Dockerfile.lambda` com handler em `src/lambda.ts`
+- Suporte completo a AWS Lambda via @vendia/serverless-express
 
 ## 📚 Documentação da API
 
