@@ -94,6 +94,11 @@ export class OrganizationLookupService {
       });
 
       // Consultar a API Oracle
+      const query = `OrganizationCode='${organizationCode}'`;
+      const url = `/inventoryOrganizations?q=${encodeURIComponent(query)}&limit=1&fields=OrganizationId,OrganizationCode,OrganizationName,ManagementBusinessUnitId,ManagementBusinessUnitName,LocationId,LocationCode,MasterOrganizationId,MasterOrganizationCode`;
+      
+      this.logger.log(`URL da requisição: ${this.baseUrl}/fscmRestApi/resources/${this.version}${url}`);
+      
       const response = await client.get('/inventoryOrganizations', {
         params: {
           q: `OrganizationCode='${organizationCode}'`,
@@ -137,6 +142,14 @@ export class OrganizationLookupService {
 
     } catch (error) {
       this.logger.error(`Erro ao buscar organização ${organizationCode}: ${error.message}`);
+      
+      // Log detalhado para erro 401 (autenticação)
+      if (error.response?.status === 401) {
+        this.logger.error(`❌ Erro 401 - Autenticação falhou ao buscar organização ${organizationCode}`);
+        this.logger.error(`   URL: ${this.baseUrl}/fscmRestApi/resources/${this.version}/inventoryOrganizations`);
+        this.logger.error(`   Verifique se FUSION_USERNAME e FUSION_PASSWORD estão corretos no .env`);
+        this.logger.error(`   Detalhes do erro: ${JSON.stringify(error.response?.data || {})}`);
+      }
 
       // Se erro 404, retornar null
       if (error.response?.status === 404) {

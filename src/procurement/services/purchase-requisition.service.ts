@@ -4,6 +4,7 @@ import { AuthService } from '../../auth/auth.service';
 import { ItemLookupService } from '../../fusion/item-lookup.service';
 import { OrganizationLookupService } from '../../fusion/organization-lookup.service';
 import { FusionService } from '../../fusion/fusion.service';
+import { UserLookupService } from '../../fusion/user-lookup.service';
 import axios, { AxiosInstance } from 'axios';
 import { CreatePurchaseRequisitionDto } from '../dto/create-purchase-requisition.dto';
 
@@ -26,6 +27,7 @@ export class PurchaseRequisitionService {
     private readonly itemLookupService: ItemLookupService,
     private readonly organizationLookupService: OrganizationLookupService,
     private readonly fusionService: FusionService,
+    private readonly userLookupService: UserLookupService,
   ) {
     this.baseUrl = this.configService.get<string>('FUSION_BASE_URL') || '';
     if (!this.baseUrl) {
@@ -101,7 +103,7 @@ export class PurchaseRequisitionService {
       this.logger.log(`✅ Item ${dto.itemNumber} habilitado (ItemId: ${item.ItemId}) [${operationId}]`);
 
       // 3. Preparar o payload da Purchase Requisition com dados corretos
-      const payload = this.buildPurchaseRequisitionPayload(dto, item, orgData, operationId);
+      const payload = await this.buildPurchaseRequisitionPayload(dto, item, orgData, operationId);
 
       // 4. Criar a Purchase Requisition na Oracle
       const authHeader = this.authService.getBasicAuthHeader();
@@ -239,12 +241,12 @@ export class PurchaseRequisitionService {
    * Exemplo: "B10180 BILD 10 DESENVOLVI" (correto)
    * Não: "OI_B10180" (errado - código da organização)
    */
-  private buildPurchaseRequisitionPayload(
+  private async buildPurchaseRequisitionPayload(
     dto: CreatePurchaseRequisitionDto,
     item: any,
     orgData: any,
     operationId: string,
-  ): any {
+  ): Promise<any> {
     // Converter preço de string para número (trocar vírgula por ponto)
     const price = parseFloat(dto.price.replace(',', '.'));
     const quantity = dto.quantity || 1;
@@ -263,8 +265,34 @@ export class PurchaseRequisitionService {
     this.logger.log(`Construindo payload - Item: ${item.ItemNumber}, Preço: ${price}, Quantidade: ${quantity}, UOM: ${uom} [${operationId}]`);
     this.logger.log(`📋 Dados recebidos do DTO - accountNumber: ${dto.accountNumber}, costCenter: ${dto.costCenter}, project: ${dto.project}, financialClass: ${dto.financialClass} [${operationId}]`);
 
-    // Email do requester (usa o fornecido ou padrão)
-    const requesterEmail = dto.requesterEmail || 'automacao.csc@bild.com.br';
+    // Email do requester: 
+    // 1. Se fornecido no DTO, usa esse
+    // 2. Se tiver nome do requester, busca o email no Fusion
+    // 3. Se não encontrar, usa o padrão
+    let requesterEmail = dto.requesterEmail;
+    
+    if (!requesterEmail && dto.requester) {
+      this.logger.log(`🔍 Buscando email do solicitante: "${dto.requester}" [${operationId}]`);
+      try {
+        const foundEmail = await this.userLookupService.findUserEmailByName(dto.requester);
+        
+        if (foundEmail) {
+          requesterEmail = foundEmail;
+          this.logger.log(`✅ Email encontrado para "${dto.requester}": ${requesterEmail} [${operationId}]`);
+        } else {
+          this.logger.warn(`⚠️ Email não encontrado para "${dto.requester}", usando padrão [${operationId}]`);
+        }
+      } catch (error) {
+        this.logger.error(`❌ Erro ao buscar email para "${dto.requester}": ${error.message} [${operationId}]`);
+        this.logger.warn(`⚠️ Usando email padrão devido ao erro na busca [${operationId}]`);
+      }
+    }
+    
+    // Fallback para email padrão se não encontrou
+    if (!requesterEmail) {
+      requesterEmail = 'automacao.csc@bild.com.br';
+      this.logger.log(`📧 Usando email padrão: ${requesterEmail} [${operationId}]`);
+    }
 
     // Payload corrigido baseado nos erros documentados
     const deliverToLocationCode = dto.deliveryLocation || orgData.locationCode;
@@ -442,11 +470,22 @@ export class PurchaseRequisitionService {
   async getPurchaseRequisition(requisitionId: number): Promise<any> {
     const operationId = `PR_GET_${Date.now()}`;
     
+    // Validar se o ID é válido
+    if (!requisitionId || isNaN(requisitionId)) {
+      this.logger.error(`ID inválido recebido: ${requisitionId} [${operationId}]`);
+      throw new HttpException(
+        `ID da requisição inválido: ${requisitionId}`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    
     this.logger.log(`Buscando Purchase Requisition ID: ${requisitionId} [${operationId}]`);
 
     try {
       const authHeader = this.authService.getBasicAuthHeader();
       const url = `${this.baseUrl}/fscmRestApi/resources/${this.apiVersion}/purchaseRequisitions/${requisitionId}`;
+
+      this.logger.log(`URL da requisição: ${url} [${operationId}]`);
 
       const response = await this.axiosInstance.get(url, { 
         headers: {
@@ -456,12 +495,20 @@ export class PurchaseRequisitionService {
         },
       });
 
-      this.logger.log(`Purchase Requisition encontrada: ${response.data.Requisition} [${operationId}]`);
+      this.logger.log(`Purchase Requisition encontrada: ${response.data.RequisitionNumber || response.data.Id} [${operationId}]`);
 
       return response.data;
 
     } catch (error) {
       this.logger.error(`Erro ao buscar Purchase Requisition ID: ${requisitionId} - ${error.message} [${operationId}]`);
+      
+      if (error.response?.status === 401) {
+        this.logger.error(`Erro de autenticação (401). Verifique FUSION_USERNAME e FUSION_PASSWORD [${operationId}]`);
+        throw new HttpException(
+          `Erro de autenticação ao buscar Purchase Requisition. Verifique as credenciais do Oracle Fusion.`,
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
       
       if (error.response?.status === 404) {
         throw new HttpException(
@@ -472,7 +519,7 @@ export class PurchaseRequisitionService {
 
       throw new HttpException(
         `Erro ao buscar Purchase Requisition: ${error.message}`,
-        HttpStatus.INTERNAL_SERVER_ERROR,
+        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }

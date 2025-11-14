@@ -7,11 +7,12 @@ import { FusionService } from './fusion.service';
 import { FusionController } from './fusion.controller';
 import { ItemLookupService } from './item-lookup.service';
 import { OrganizationLookupService } from './organization-lookup.service';
+import { UserLookupService } from './user-lookup.service';
 
 @Module({
   imports: [ConfigModule, AuthModule, HttpModule.register({ timeout: 20000 })],
-  providers: [FusionService, ItemLookupService, OrganizationLookupService],
+  providers: [FusionService, ItemLookupService, OrganizationLookupService, UserLookupService],
   controllers: [FusionController],
-  exports: [FusionService, ItemLookupService, OrganizationLookupService],
+  exports: [FusionService, ItemLookupService, OrganizationLookupService, UserLookupService],
 })
 export class FusionModule {}

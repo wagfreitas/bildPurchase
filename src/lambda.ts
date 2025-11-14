@@ -26,12 +26,7 @@ async function bootstrap() {
       }),
     );
 
-    // CORS
-    app.enableCors({
-      origin: '*',
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
-    });
+    // CORS gerenciado pela Function URL do Lambda - não configurar aqui para evitar duplicação
 
     // Swagger
     const config = new DocumentBuilder()

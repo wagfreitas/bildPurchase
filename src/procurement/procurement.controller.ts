@@ -17,6 +17,8 @@ import { Readable } from 'stream';
 @ApiTags('procurement/purchase-requisitions')
 @Controller('procurement/purchase-requisitions')
 export class ProcurementController {
+  private readonly logger = new Logger(ProcurementController.name);
+
   constructor(
     private readonly purchaseRequisitionService: PurchaseRequisitionService,
   ) {}
@@ -81,35 +83,6 @@ export class ProcurementController {
   }
 
   /**
-   * Busca uma Purchase Requisition por ID
-   * 
-   * GET /api/procurement/purchase-requisitions/:id
-   * 
-   * @param id ID da Purchase Requisition
-   * @returns Purchase Requisition encontrada
-   */
-  @Get(':id')
-  async getPurchaseRequisition(@Param('id') id: string) {
-    try {
-      const requisitionId = parseInt(id, 10);
-      const result = await this.purchaseRequisitionService.getPurchaseRequisition(requisitionId);
-      
-      return {
-        success: true,
-        data: result,
-      };
-    } catch (error) {
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message,
-        },
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  /**
    * Lista Purchase Requisitions
    * 
    * GET /api/procurement/purchase-requisitions?limit=10&offset=0
@@ -137,6 +110,66 @@ export class ProcurementController {
         data: result,
       };
     } catch (error) {
+      throw new HttpException(
+        {
+          success: false,
+          error: error.message,
+        },
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Busca uma Purchase Requisition por ID
+   * 
+   * GET /api/procurement/purchase-requisitions/:id
+   * 
+   * IMPORTANTE: Esta rota deve vir DEPOIS das rotas específicas (upload, etc)
+   * para evitar conflitos de roteamento
+   * 
+   * @param id ID da Purchase Requisition
+   * @returns Purchase Requisition encontrada
+   */
+  @Get(':id')
+  async getPurchaseRequisition(@Param('id') id: string) {
+    try {
+      // Validar se o ID é válido
+      if (!id || id.trim() === '') {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'ID da requisição é obrigatório',
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const requisitionId = parseInt(id, 10);
+      
+      // Validar se a conversão foi bem-sucedida
+      if (isNaN(requisitionId)) {
+        throw new HttpException(
+          {
+            success: false,
+            error: `ID inválido: "${id}". O ID deve ser um número.`,
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const result = await this.purchaseRequisitionService.getPurchaseRequisition(requisitionId);
+      
+      return {
+        success: true,
+        data: result,
+      };
+    } catch (error) {
+      // Se já é um HttpException, re-lançar
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
       throw new HttpException(
         {
           success: false,
@@ -511,10 +544,20 @@ export class ProcurementController {
           break;
         case 'solicitante':
         case 'requester':
-          normalized.requester = String(textValue);
+          // Se o valor for um email, usar como requesterEmail
+          // Caso contrário, usar como requester (nome)
+          const value = String(textValue).trim();
+          if (this.isEmail(value)) {
+            normalized.requesterEmail = value;
+            this.logger.log(`Email detectado na coluna Solicitante: ${value}`);
+          } else {
+            normalized.requester = value;
+          }
           break;
         case 'requesteremail':
         case 'requester_email':
+        case 'email_solicitante':
+        case 'email':
           normalized.requesterEmail = String(textValue);
           break;
         case 'quantity':

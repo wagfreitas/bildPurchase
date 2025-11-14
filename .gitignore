@@ -229,3 +229,4 @@ CHECKLIST_DEPLOY_CLIENTE.md
 postgres_data/
 redis_data/
 
+~cd /Volumes/External/Projetos/BILD_PURCHASE && echo "~$*.xlsx" >> .gitignore && git add .gitignore.xlsx

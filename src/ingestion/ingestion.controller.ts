@@ -52,7 +52,7 @@ export class IngestionController {
   }
 
   @Post('template')
-  @ApiOperation({ summary: 'Download CSV template for requisitions' })
+  @ApiOperation({ summary: 'Download template de requisições' })
   @ApiResponse({ status: 200, description: 'CSV template file' })
   async downloadTemplate(@Res() res: Response): Promise<void> {
     const template = `business_unit,requester,deliver_to_location,external_reference,item_number,description,supplier_number,quantity,unit_price,cost_center,project_number,submit
