@@ -218,6 +218,9 @@ Dockerfile.oci
 func.yaml
 src/main-oci.ts
 
+# Documentation files (not needed for deployment)
+CHECKLIST_DEPLOY_CLIENTE.md
+
 # Database files
 *.db
 *.sqlite
