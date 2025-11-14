@@ -12,9 +12,9 @@ export class FusionController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a single requisition (legacy endpoint)' })
-  @ApiResponse({ status: 201, description: 'Requisition created successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid requisition data' })
+  @ApiOperation({ summary: 'Cria uma requisiçao de compra no Fusion' })
+  @ApiResponse({ status: 201, description: 'Requisição criada com sucesso' })
+  @ApiResponse({ status: 400, description: 'Requisição inválida' })
   async create(@Body() dto: RequisitionDTO) {
     const header: any = {
       PreparerId: 300000102174657, // ID do preparador (obrigatório)
@@ -23,12 +23,7 @@ export class FusionController {
       TaxationCountryCode: "BR",
     };
 
-    // ExternalReference não é suportado no header principal
-    // TODO: Implementar via DFF (Dynamic Flex Fields) se necessário
-    // if (dto.externalReference) {
-    //   const dffField = process.env.EXTERNAL_REF_FIELD || 'ExternalReference';
-    //   header[dffField] = dto.externalReference;
-    // }
+  
 
     const lines = dto.lines.map((l, index) => ({
       LineNumber: index + 1,
@@ -38,7 +33,7 @@ export class FusionController {
       CurrencyCode: "BRL",
       DestinationTypeCode: "EXPENSE",
       DestinationOrganizationId: 300000006103506, // Mesmo ID da Business Unit
-      // Removido DeliverToLocationCode que pode não existir no sistema
+      
     }));
 
     const payload = { ...header, lines };
@@ -49,7 +44,7 @@ export class FusionController {
         if (Array.isArray(found?.items) && found.items.length > 0) {
           return { duplicated: true, requisitions: found.items };
         }
-      } catch { /* se a consulta não for suportada no seu ambiente, seguimos criando */ }
+      } catch {  }
     }
 
     const created = await this.fusion.createRequisition(payload);
@@ -69,27 +64,27 @@ export class FusionController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get requisition details by ID' })
-  @ApiParam({ name: 'id', description: 'Fusion Requisition ID' })
-  @ApiResponse({ status: 200, description: 'Requisition details' })
-  @ApiResponse({ status: 404, description: 'Requisition not found' })
+  @ApiOperation({ summary: 'Buscar requisicao de compra no Fusion' })
+  @ApiParam({ name: 'id', description: 'ID da requisição de compra' })
+  @ApiResponse({ status: 200, description: 'Detalhes da requisição de compra' })
+  @ApiResponse({ status: 404, description: 'Requisição de compra não encontrada' })
   async getRequisition(@Param('id') id: string) {
     return await this.fusion.getRequisition(id);
   }
 
   @Post('submit')
-  @ApiOperation({ summary: 'Submit a requisition for approval' })
-  @ApiResponse({ status: 200, description: 'Requisition submitted successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid requisition ID' })
+  @ApiOperation({ summary: 'Submeter uma requisição de compra para aprovação' })
+  @ApiResponse({ status: 200, description: 'Requisição submetida com sucesso' })
+  @ApiResponse({ status: 400, description: 'ID da requisição de compra inválido' })
   async submit(@Body() dto: SubmitDTO) {
     const res = await this.fusion.submitRequisition(dto.requisitionId);
     return res;
   }
 
   @Post('bulk')
-  @ApiOperation({ summary: 'Create multiple requisitions (synchronous processing)' })
-  @ApiResponse({ status: 200, description: 'Bulk processing results' })
-  @ApiResponse({ status: 400, description: 'Invalid requisition data' })
+  @ApiOperation({ summary: 'Criar múltiplas requisições de compra' })
+  @ApiResponse({ status: 200, description: 'Resultados do processamento em lote' })
+  @ApiResponse({ status: 400, description: 'Dados da requisição de compra inválidos' })
   async bulk(@Body() items: RequisitionDTO[]) {
     const results: any[] = [];
     for (const dto of items) {
@@ -119,69 +114,10 @@ export class FusionController {
   }
 
   @Post('search')
-  @ApiOperation({ summary: 'Search requisitions by external reference' })
-  @ApiResponse({ status: 200, description: 'Search results' })
+  @ApiOperation({ summary: 'Buscar requisicoes de compra por referencia externa' })
+  @ApiResponse({ status: 200, description: 'Busca resultados' })
   async searchByExternalRef(@Body() body: { externalReference: string }) {
     return await this.fusion.findRequisitionByExternalRef(body.externalReference);
   }
 
-  @Post('test-connection')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Test Fusion API connection' })
-  @ApiResponse({ status: 200, description: 'Connection test result' })
-  async testConnection() {
-    const isConnected = await this.fusion.testConnection();
-    return { 
-      connected: isConnected,
-      message: isConnected ? 'Connection successful' : 'Connection failed'
-    };
-  }
-
-  @Get('debug')
-  @ApiOperation({ summary: 'Debug configuration' })
-  debug() {
-    return {
-      baseUrl: process.env.FUSION_BASE_URL,
-      version: process.env.FUSION_REST_VERSION,
-      allEnv: Object.keys(process.env).filter(key => key.includes('FUSION'))
-    };
-  }
-
-  @Post('test-payload')
-  @ApiOperation({ summary: 'Test different payload structures' })
-  async testPayload(@Body() body: { payload: any }) {
-    try {
-      const result = await this.fusion.createRequisition(body.payload);
-      return { success: true, result };
-    } catch (error: any) {
-      return { 
-        success: false, 
-        error: error.message,
-        statusCode: error.status || 500
-      };
-    }
-  }
-
-  @Post('describe-dff')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get DFF schema for a distribution' })
-  @ApiResponse({ status: 200, description: 'DFF schema retrieved successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid parameters' })
-  async describeDFF(@Body() body: { requisitionId: string; lineId: string; distributionId: string }) {
-    try {
-      const schema = await this.fusion.describeDistributionDFF(
-        body.requisitionId,
-        body.lineId,
-        body.distributionId
-      );
-      return { success: true, schema };
-    } catch (error: any) {
-      return { 
-        success: false, 
-        error: error.message,
-        statusCode: error.status || 500,
-        details: error.response?.details || null
-      };
-    }
-  }
 }

@@ -18,7 +18,10 @@ export class ItemLookupService {
     private readonly auth: AuthService,
     private readonly configService: ConfigService,
   ) {
-    this.baseUrl = this.configService.get<string>('FUSION_BASE_URL') || 'https://fa-evvi-test-saasfaprod1.fa.ocs.oraclecloud.com';
+    this.baseUrl = this.configService.get<string>('FUSION_BASE_URL') || '';
+    if (!this.baseUrl) {
+      this.logger.warn('⚠️ FUSION_BASE_URL não configurado');
+    }
     this.version = this.configService.get<string>('FUSION_REST_VERSION') || '11.13.18.05';
   }
 
@@ -57,11 +60,26 @@ export class ItemLookupService {
 
       this.logger.log(`✅ Item ${itemNumber} encontrado na organização ${organizationCode} (ItemId: ${item.ItemId})`);
       
+      this.logger.log(`📦 Dados completos do item do Fusion: ${JSON.stringify({
+        ItemNumber: item.ItemNumber,
+        ItemDescription: item.ItemDescription,
+        Description: item.Description,
+        ItemId: item.ItemId,
+        PrimaryUOMCode: item.PrimaryUOMCode,
+        PrimaryUnitOfMeasure: item.PrimaryUnitOfMeasure,
+        PrimaryUOMValue: item.PrimaryUOMValue,
+        OrganizationCode: item.OrganizationCode,
+      }, null, 2)}`);
+      
+      // IMPORTANTE: O Fusion retorna ItemDescription (não Description)
+      // Exemplo: "PREMIACAO CONSULTOR (HOUSE)"
+      const itemDescription = item.ItemDescription || item.Description || item.ItemNumber;
+      
       return {
         ItemId: item.ItemId,
         ItemNumber: item.ItemNumber,
-        Description: item.Description || item.ItemNumber, // Usar ItemNumber como fallback
-        PrimaryUOM: item.PrimaryUOMCode || item.PrimaryUnitOfMeasure || 'UN', // Fallback para 'UN'
+        Description: itemDescription, // Usar ItemDescription do Fusion
+        PrimaryUOM: item.PrimaryUOMCode || item.PrimaryUOMValue || item.PrimaryUnitOfMeasure || 'UN', // Fallback para 'UN'
         OrganizationId: item.OrganizationId,
         OrganizationCode: item.OrganizationCode,
       };

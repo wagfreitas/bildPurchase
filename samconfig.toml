@@ -1,0 +1,38 @@
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "bild-purchase-api"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+image_repositories = ["BildPurchaseApiFunction=bild-purchase-api"]
+parameter_overrides = [
+  "FusionBaseUrl=https://fa-evvi-saasfaprod1.fa.ocs.oraclecloud.com",
+  "FusionRestVersion=11.13.18.05",
+  "FusionUsername=SUBSTITUIR_PELO_USUARIO",
+  "FusionPassword=SUBSTITUIR_PELA_SENHA",
+  "ExternalRefField=ExternalReference"
+]
+
+[default.package.parameters]
+resolve_s3 = true
+
+[default.sync.parameters]
+watch = true
+
+[default.local_start_api.parameters]
+warm_containers = "EAGER"
+
+[default.local_start_lambda.parameters]
+warm_containers = "EAGER"
+

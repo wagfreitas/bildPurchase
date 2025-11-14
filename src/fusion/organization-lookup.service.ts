@@ -4,6 +4,29 @@ import axios from 'axios';
 import { AuthService } from '../auth/auth.service';
 
 /**
+
+ * Recebe: Nome da BU (ex: "V30326 TRINITA")
+ * Processa:
+ * Extrai código da organização (ex: V30326 → OI_V30326)
+ * Busca no Oracle via REST: /inventoryOrganizations
+ * Valida se existe e está ativa
+ * Retorna:
+ * organizationId: ID numérico
+ * organizationCode: OI_V30326
+ * businessUnitId: ID da BU
+ * businessUnitName: Nome completo
+ * locationId: ID do local de entrega
+ * locationCode: Código do local (ex: LOC_V30326)
+ * Por que é necessário
+ * Oracle precisa de IDs numéricos, não nomes
+ * Cada BU tem uma organização de inventário associada
+ *  Items só são válidos se estiverem habilitados na organização correta
+ * Precisamos do LocationId para preencher Deliver-To Location
+
+ */
+
+
+/**
  * Interface para dados de uma Inventory Organization
  */
 export interface OrganizationData {
@@ -38,7 +61,10 @@ export class OrganizationLookupService {
     private readonly configService: ConfigService,
     private readonly auth: AuthService,
   ) {
-    this.baseUrl = this.configService.get<string>('FUSION_BASE_URL') || 'https://fa-evvi-test-saasfaprod1.fa.ocs.oraclecloud.com';
+    this.baseUrl = this.configService.get<string>('FUSION_BASE_URL') || '';
+    if (!this.baseUrl) {
+      this.logger.warn('⚠️ FUSION_BASE_URL não configurado');
+    }
     this.version = this.configService.get<string>('FUSION_REST_VERSION') || '11.13.18.05';
   }
 

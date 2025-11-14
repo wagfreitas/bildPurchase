@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: BILD Purchase Requisitions API - Oracle Fusion Integration
+
+Globals:
+  Function:
+    Timeout: 120
+    MemorySize: 2048
+    Runtime: provided.al2
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        FUSION_BASE_URL: !Ref FusionBaseUrl
+        FUSION_REST_VERSION: !Ref FusionRestVersion
+        FUSION_USERNAME: !Ref FusionUsername
+        FUSION_PASSWORD: !Ref FusionPassword
+        EXTERNAL_REF_FIELD: !Ref ExternalRefField
+        NODE_ENV: production
+
+Parameters:
+  FusionBaseUrl:
+    Type: String
+    Description: URL base do Oracle Fusion (ex: https://fa-evvi-saasfaprod1.fa.ocs.oraclecloud.com)
+    Default: https://fa-evvi-saasfaprod1.fa.ocs.oraclecloud.com
+  
+  FusionRestVersion:
+    Type: String
+    Description: Versão da API REST do Oracle Fusion
+    Default: 11.13.18.05
+  
+  FusionUsername:
+    Type: String
+    Description: Usuário técnico do Oracle Fusion
+    NoEcho: true
+  
+  FusionPassword:
+    Type: String
+    Description: Senha do usuário técnico do Oracle Fusion
+    NoEcho: true
+  
+  ExternalRefField:
+    Type: String
+    Description: Nome do campo de referência externa
+    Default: ExternalReference
+
+Resources:
+  BildPurchaseApiFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerTag: latest
+      DockerContext: .
+      Dockerfile: Dockerfile.lambda
+    Properties:
+      PackageType: Image
+      FunctionName: bild-purchase-api
+      Description: API para criação de Purchase Requisitions no Oracle Fusion
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          AllowHeaders:
+            - Content-Type
+            - Authorization
+            - Accept
+          MaxAge: 300
+      Policies:
+        - AWSLambdaBasicExecutionRole
+      Tags:
+        Application: bild-purchase-api
+        Environment: production
+
+  # ECR Repository para a imagem Docker
+  BildPurchaseApiRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: bild-purchase-api
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 10
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+
+Outputs:
+  ApiUrl:
+    Description: URL da API
+    Value: !GetAtt BildPurchaseApiFunction.FunctionUrl
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiUrl
+  
+  FunctionName:
+    Description: Nome da função Lambda
+    Value: !Ref BildPurchaseApiFunction
+    Export:
+      Name: !Sub ${AWS::StackName}-FunctionName
+  
+  RepositoryUri:
+    Description: URI do repositório ECR
+    Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${BildPurchaseApiRepository}
+    Export:
+      Name: !Sub ${AWS::StackName}-RepositoryUri
+

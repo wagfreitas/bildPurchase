@@ -27,7 +27,10 @@ export class PurchaseRequisitionService {
     private readonly organizationLookupService: OrganizationLookupService,
     private readonly fusionService: FusionService,
   ) {
-    this.baseUrl = this.configService.get<string>('FUSION_BASE_URL') || 'https://fa-evvi-test-saasfaprod1.fa.ocs.oraclecloud.com';
+    this.baseUrl = this.configService.get<string>('FUSION_BASE_URL') || '';
+    if (!this.baseUrl) {
+      this.logger.warn('⚠️ FUSION_BASE_URL não configurado');
+    }
     this.apiVersion = this.configService.get<string>('FUSION_REST_VERSION') || '11.13.18.05';
 
     this.axiosInstance = axios.create({
@@ -120,8 +123,10 @@ export class PurchaseRequisitionService {
       const requisitionId = response.data.RequisitionHeaderId;
       const requisitionNumber = response.data.Requisition;
 
-      // 5. Atualizar DFF (Centro de Custo e Projeto) se fornecidos
-      if (dto.costCenter && dto.project && response.data.lines && response.data.lines[0]) {
+      // 5. Atualizar DFFs APÓS a criação da requisição
+      // NOTA: ChargeAccount agora é incluído diretamente no payload inicial
+      // Apenas atualizamos os DFFs (Centro de Custo, Projeto, Classe Financeira)
+      if (response.data.lines && response.data.lines[0]) {
         const line = response.data.lines[0];
         const lineId = line.RequisitionLineId;
         
@@ -129,28 +134,29 @@ export class PurchaseRequisitionService {
           const distribution = line.distributions[0];
           const distributionId = distribution.RequisitionDistributionId;
           
-          this.logger.log(`📝 Atualizando DFFs na distribuição (CC, Projeto${dto.financialClass ? ', Classe Financeira' : ''}) [${operationId}]`);
-          
-          try {
-            await this.fusionService.updateDistributionDFF(
-              String(requisitionId),
-              String(lineId),
-              String(distributionId),
-              dto.costCenter,
-              dto.project,
-              dto.financialClass,
-            );
-            this.logger.log(`✅ DFFs atualizados com sucesso [${operationId}]`);
-          } catch (updateError) {
-            this.logger.warn(`⚠️  Erro ao atualizar Centro de Custo e Projeto: ${updateError.message} [${operationId}]`);
-            this.logger.warn(`   A requisição foi criada, mas os campos de "Additional Information" podem estar vazios`);
+          // Atualizar DFF (Centro de Custo e Projeto) se fornecidos
+          if (dto.costCenter && dto.project) {
+            this.logger.log(`📝 Atualizando DFFs na distribuição (CC, Projeto${dto.financialClass ? ', Classe Financeira' : ''}) [${operationId}]`);
+            
+            try {
+              await this.fusionService.updateDistributionDFF(
+                String(requisitionId),
+                String(lineId),
+                String(distributionId),
+                dto.costCenter,
+                dto.project,
+                dto.financialClass,
+              );
+              this.logger.log(`✅ DFFs atualizados com sucesso [${operationId}]`);
+            } catch (updateError) {
+              this.logger.warn(`⚠️  Erro ao atualizar Centro de Custo e Projeto: ${updateError.message} [${operationId}]`);
+              this.logger.warn(`   A requisição foi criada, mas os campos de "Additional Information" podem estar vazios`);
+            }
           }
         }
       }
 
       // Auto-submit: Submete automaticamente para aprovação após criação
-      // CORRIGIDO: Usar Content-Type correto (application/vnd.oracle.adf.action+json)
-      // para actions do Oracle Fusion
       const shouldAutoSubmit = dto.autoSubmit !== false; // Default: true
       let submissionResult = null;
       let submissionError = null;
@@ -245,18 +251,24 @@ export class PurchaseRequisitionService {
     const uom = dto.uom || item.PrimaryUOM || 'UN';
     const currencyCode = dto.currencyCode || 'BRL';
 
-    // Descrição padrão
-    const description = dto.description || `Requisição Zeev Ticket: ${dto.ticket}`;
+    // Descrição: usar a do DTO, ou a descrição do item do Fusion, ou fallback para ticket
+    // Prioridade: dto.description > item.Description > ticket
+    const description = dto.description || item.Description || `Requisição Zeev Ticket: ${dto.ticket}`;
+    
+    this.logger.log(`📝 Descrição da requisição: ${description} [${operationId}]`);
 
     // Data de necessidade (se não informada, usar 30 dias a partir de hoje)
     const needByDate = dto.needByDate || this.getDefaultNeedByDate();
 
     this.logger.log(`Construindo payload - Item: ${item.ItemNumber}, Preço: ${price}, Quantidade: ${quantity}, UOM: ${uom} [${operationId}]`);
+    this.logger.log(`📋 Dados recebidos do DTO - accountNumber: ${dto.accountNumber}, costCenter: ${dto.costCenter}, project: ${dto.project}, financialClass: ${dto.financialClass} [${operationId}]`);
 
     // Email do requester (usa o fornecido ou padrão)
     const requesterEmail = dto.requesterEmail || 'automacao.csc@bild.com.br';
 
     // Payload corrigido baseado nos erros documentados
+    const deliverToLocationCode = dto.deliveryLocation || orgData.locationCode;
+
     const payload = {
       // === CABEÇALHO ===
       // Usar RequisitioningBU com o nome COMPLETO da Business Unit
@@ -307,7 +319,7 @@ export class PurchaseRequisitionService {
           // LOCALIZAÇÃO DE ENTREGA
           // Enviar tanto o ID quanto o Code para garantir compatibilidade
           DeliverToLocationId: orgData.locationId,
-          DeliverToLocationCode: orgData.locationCode,
+          DeliverToLocationCode: deliverToLocationCode,
           
           // SOLICITANTE - RequesterEmail é obrigatório
           RequesterEmail: requesterEmail,
@@ -321,44 +333,46 @@ export class PurchaseRequisitionService {
           }),
           
           // DISTRIBUIÇÕES CONTÁBEIS
-          // ChargeAccount no formato segmentado Oracle descoberto via interface:
-          // EMPRESA.CONTA_CONTABIL.INTERCOMPANHIA.CENTRO_CUSTO.PROJETO.CLASSE_FIN.FUT1.FUT2
-          // Exemplo: H70002.32103010011.000000.CC0057.PC0041.00000.0.0
-          // 
-          // NOTA: O Oracle deriva automaticamente Centro de Custo e Projeto
-          // dos segmentos do ChargeAccount para preencher "Additional Information"
-          ...(dto.accountNumber && dto.costCenter && dto.project ? {
-            distributions: [
-              {
-                DistributionNumber: 1,
-                Quantity: quantity,
-                // Montar ChargeAccount no formato segmentado
-                // O Oracle deriva automaticamente os campos de "Additional Information"
+          // ESTRATÉGIA: Incluir ChargeAccount DIRETAMENTE no payload inicial
+          // Isso garante que o ChargeAccount seja enviado corretamente
+          // A Variance Account será derivada pelo Fusion via TAB (se configurado)
+          distributions: [
+            {
+              DistributionNumber: 1,
+              Quantity: quantity,
+              // Incluir ChargeAccount se tivermos os dados necessários
+              ...(dto.accountNumber && dto.costCenter && dto.project && {
                 ChargeAccount: this.buildChargeAccount(
                   orgData.businessUnitName,
                   dto.accountNumber,
                   dto.costCenter,
                   dto.project,
                   dto.financialClass,
-                  operationId
+                  operationId,
                 ),
-              },
-            ],
-          } : {
-            // Se não tiver todos os campos, criar distribution básica
-            distributions: [
-              {
-                DistributionNumber: 1,
-                Quantity: quantity,
-              },
-            ],
-          }),
+              }),
+            },
+          ],
           
           // NOTA/OBSERVAÇÃO - Usar NoteToBuyer ao invés de Note
           NoteToBuyer: `Ticket Zeev: ${dto.ticket} | Solicitante: ${dto.requester}`,
         },
       ],
     };
+
+    // Log completo do payload antes de enviar
+    this.logger.log(`📦 PAYLOAD COMPLETO ENVIADO AO FUSION [${operationId}]:`);
+    this.logger.log(JSON.stringify(payload, null, 2));
+    
+    // Log específico das distribuições
+    if (payload.lines && payload.lines[0] && payload.lines[0].distributions) {
+      this.logger.log(`📊 DISTRIBUIÇÕES ENVIADAS [${operationId}]:`);
+      payload.lines[0].distributions.forEach((dist: any, idx: number) => {
+        this.logger.log(`   Distribution ${idx + 1}: ${JSON.stringify(dist, null, 2)}`);
+      });
+    } else {
+      this.logger.warn(`⚠️  NENHUMA DISTRIBUIÇÃO ENCONTRADA NO PAYLOAD [${operationId}]`);
+    }
 
     return payload;
   }
@@ -375,16 +389,20 @@ export class PurchaseRequisitionService {
   /**
    * Monta ChargeAccount no formato segmentado Oracle
    * 
+   * ESTRATÉGIA ALTERADA: Baseado no erro FND_VS_VALUES_NOT_RELATED, a Classe Financeira
+   * pode não ser válida para a Conta Contábil. Vamos montar SEM Classe Financeira primeiro,
+   * deixando o Fusion usar o padrão ou derivar automaticamente.
+   * 
    * Estrutura descoberta via interface Oracle Fusion:
    * EMPRESA.CONTA_CONTABIL.INTERCOMPANHIA.CENTRO_CUSTO.PROJETO.CLASSE_FIN.FUT1.FUT2
    * 
-   * Exemplo: H70002.32103010011.000000.CC0057.PC0041.CF001.0.0
+   * IMPORTANTE: Se a Classe Financeira causar erro de validação, usar "00000" (padrão)
    * 
    * @param businessUnitName Nome completo da BU (ex: "H70002 BIVI MATRIZ")
    * @param accountNumber Conta contábil (ex: "32102040021")
    * @param costCenter Centro de custo (ex: "CC0091")
    * @param project Projeto (ex: "PV0508")
-   * @param financialClass Classe financeira (ex: "CF001") - opcional, usa "00000" se não fornecido
+   * @param financialClass Classe financeira (ex: "CF001") - opcional, NÃO usar se causar erro de validação
    * @param operationId ID da operação para logging
    * @returns ChargeAccount no formato segmentado
    */
@@ -399,16 +417,20 @@ export class PurchaseRequisitionService {
     // Extrair código da empresa do nome da BU (ex: "H70002 BIVI MATRIZ" -> "H70002")
     const empresa = businessUnitName.split(' ')[0];
     
-    // Classe financeira: usar a fornecida ou "00000" como padrão
-    const classeFin = financialClass || '00000';
+    // ESTRATÉGIA: NÃO incluir Classe Financeira no ChargeAccount
+    // O erro FND_VS_VALUES_NOT_RELATED indica que a combinação Conta Contábil + Classe Financeira
+    // não é válida no Chart of Accounts. Vamos usar "00000" (padrão) e deixar o Fusion derivar.
+    // A Classe Financeira continuará sendo salva no DFF para referência, mas não no ChargeAccount.
+    const classeFin = '00000'; // Sempre usar padrão para evitar erro de validação
     
     // Montar ChargeAccount no formato segmentado
     // EMPRESA.CONTA_CONTABIL.INTERCOMPANHIA.CENTRO_CUSTO.PROJETO.CLASSE_FIN.FUT1.FUT2
     const chargeAccount = `${empresa}.${accountNumber}.000000.${costCenter}.${project}.${classeFin}.0.0`;
     
     this.logger.log(`📊 ChargeAccount montado: ${chargeAccount} [${operationId}]`);
+    this.logger.log(`   ⚠️  Classe Financeira NÃO incluída no ChargeAccount (usando padrão 00000) [${operationId}]`);
     if (financialClass) {
-      this.logger.log(`   Classe Financeira incluída: ${financialClass} [${operationId}]`);
+      this.logger.log(`   ℹ️  Classe Financeira ${financialClass} será salva apenas no DFF (Additional Information) [${operationId}]`);
     }
     
     return chargeAccount;
