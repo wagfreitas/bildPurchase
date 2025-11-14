@@ -7,6 +7,9 @@ yarn-error.log*
 # Documentation (internal use only)
 docs/
 
+# Frontend (not needed for API deployment)
+frontend/
+
 # Runtime data
 pids
 *.pid
@@ -202,6 +205,18 @@ uploads/
 
 # Test payloads
 test-payload-*.json
+
+# Test files and examples
+Reqs Testes.*
+req_teste_manu.xlsx
+modelo_INPUT_*.csv
+modelo_INPUT_*.xlsx
+TEMPLATE_REQUISICOES.csv
+
+# OCI-specific files (not needed for AWS SAM)
+Dockerfile.oci
+func.yaml
+src/main-oci.ts
 
 # Database files
 *.db
