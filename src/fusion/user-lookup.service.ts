@@ -23,16 +23,56 @@ export class UserLookupService {
   /**
    * Busca o email do usuário no Oracle Fusion baseado no nome
    * 
+   * IMPORTANTE: A API de usuários (/users, /persons, /employees) não está disponível
+   * para o usuário automacao.csc@bild.com.br devido a restrições de permissão.
+   * 
+   * Endpoints testados:
+   * - /fscmRestApi/resources/latest/users → 404 (não existe)
+   * - /fscmRestApi/resources/latest/workers → 404 (não existe)
+   * - /hcmRestApi/resources/latest/employees → 404 (módulo HCM não disponível)
+   * - /hcmRestApi/resources/latest/emps → 403 (sem permissão)
+   * 
+   * ALTERNATIVAS:
+   * 1. Fornecer requesterEmail diretamente no input (RECOMENDADO)
+   * 2. Consultar PRs anteriores do mesmo requester para descobrir o email
+   * 3. Manter mapeamento local nome→email em banco de dados
+   * 
    * @param userName Nome completo do usuário (ex: "JOAO PEDRO EZOEL LEITE GHIOTTI")
    * @returns Email do usuário ou null se não encontrado
    */
   async findUserEmailByName(userName: string): Promise<string | null> {
     try {
-      this.logger.log(`Buscando email do usuário: ${userName}`);
+      this.logger.log(`⚠️ Busca de email por nome desabilitada - API de usuários não disponível`);
+      this.logger.log(`Nome solicitado: ${userName}`);
+      this.logger.log(`Recomendação: Fornecer o requesterEmail diretamente no input`);
+      
+      // TODO: Implementar busca em PRs anteriores do mesmo requester
+      // const email = await this.findEmailFromPreviousPRs(userName);
+      // if (email) return email;
+      
+      return null;
+
+    } catch (error) {
+      this.logger.error(`Erro ao buscar email do usuário ${userName}: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Busca o email do requester em Purchase Requisitions anteriores
+   * Esta é a única fonte confiável de emails disponível via API SCM
+   * 
+   * @param userName Nome do requester
+   * @returns Email encontrado ou null
+   */
+  private async findEmailFromPreviousPRs(userName: string): Promise<string | null> {
+    try {
+      const normalizedName = userName.trim().toUpperCase().replace(/\s+/g, ' ');
+      this.logger.log(`🔍 Buscando email em PRs anteriores para: ${normalizedName}`);
 
       const authHeader = this.auth.getBasicAuthHeader();
       const client = axios.create({
-        baseURL: `${this.baseUrl}/fscmRestApi/resources/${this.version}`,
+        baseURL: `${this.baseUrl}/fscmRestApi/resources/latest`,
         headers: {
           Authorization: authHeader,
           'Content-Type': 'application/json',
@@ -41,113 +81,28 @@ export class UserLookupService {
         timeout: 30000,
       });
 
-      // Normalizar o nome para busca (remover espaços extras, converter para maiúsculas)
-      const normalizedName = userName.trim().toUpperCase().replace(/\s+/g, ' ');
-      const firstName = normalizedName.split(' ')[0]; // Primeiro nome para busca parcial
+      // Buscar PRs recentes deste requester
+      const response = await client.get('/purchaseRequisitions', {
+        params: {
+          q: `Requester='${normalizedName}'`,
+          limit: 1,
+          fields: 'RequisitionHeaderId,Requester,RequesterEmail',
+        },
+      });
 
-      this.logger.log(`Nome normalizado: "${normalizedName}", Primeiro nome: "${firstName}"`);
-
-      // Tentar buscar por PersonName (nome completo) e também por primeiro nome
-      // A API do Oracle Fusion pode usar diferentes campos, vamos tentar alguns
-      const searchQueries = [
-        `PersonName='${normalizedName}'`,           // Match exato
-        `PersonName like '${normalizedName}%'`,     // Começa com nome completo
-        `PersonName like '${firstName}%'`,          // Começa com primeiro nome
-        `DisplayName='${normalizedName}'`,          // Match exato DisplayName
-        `DisplayName like '${normalizedName}%'`,    // Começa com DisplayName
-        `DisplayName like '${firstName}%'`,         // Primeiro nome no DisplayName
-      ];
-
-      // Tentar diferentes endpoints da API Oracle Fusion
-      const endpoints = ['/users', '/persons', '/employees'];
+      const items = response.data.items || [];
       
-      for (const endpoint of endpoints) {
-        for (const query of searchQueries) {
-          try {
-            this.logger.log(`Tentando buscar em ${endpoint} com query: ${query}`);
-            
-            const response = await client.get(endpoint, {
-              params: {
-                q: query,
-                limit: 10,
-                fields: 'PersonId,PersonName,EmailAddress,UserName,DisplayName,Email',
-              },
-            });
-
-            const items = response.data.items || [];
-            this.logger.log(`Resultados encontrados em ${endpoint}: ${items.length}`);
-
-            if (items.length > 0) {
-              // Log dos resultados para debug
-              this.logger.log(`Usuários encontrados: ${JSON.stringify(items.map((u: any) => ({ 
-                name: u.PersonName || u.DisplayName, 
-                email: u.EmailAddress || u.Email 
-              })))}`);
-
-              // Tentar encontrar match exato primeiro
-              const exactMatch = items.find(
-                (user: any) => {
-                  const personName = (user.PersonName || '').toUpperCase().trim();
-                  const displayName = (user.DisplayName || '').toUpperCase().trim();
-                  return personName === normalizedName || displayName === normalizedName;
-                }
-              );
-
-              if (exactMatch && (exactMatch.EmailAddress || exactMatch.Email)) {
-                const email = exactMatch.EmailAddress || exactMatch.Email;
-                this.logger.log(`✅ Email encontrado (match exato) para ${userName}: ${email}`);
-                return email;
-              }
-
-              // Se não encontrou match exato, tentar match parcial (começa com o nome)
-              const partialMatch = items.find(
-                (user: any) => {
-                  const personName = (user.PersonName || '').toUpperCase().trim();
-                  const displayName = (user.DisplayName || '').toUpperCase().trim();
-                  return personName.startsWith(normalizedName.split(' ')[0]) || 
-                         displayName.startsWith(normalizedName.split(' ')[0]);
-                }
-              );
-
-              if (partialMatch && (partialMatch.EmailAddress || partialMatch.Email)) {
-                const email = partialMatch.EmailAddress || partialMatch.Email;
-                this.logger.log(`✅ Email encontrado (match parcial) para ${userName}: ${email}`);
-                return email;
-              }
-
-              // Se não encontrou match, usar o primeiro resultado se tiver email
-              const firstWithEmail = items.find((u: any) => u.EmailAddress || u.Email);
-              if (firstWithEmail && (firstWithEmail.EmailAddress || firstWithEmail.Email)) {
-                const email = firstWithEmail.EmailAddress || firstWithEmail.Email;
-                this.logger.log(`✅ Email encontrado (primeiro resultado) para ${userName}: ${email}`);
-                return email;
-              }
-            }
-          } catch (error) {
-            // Log do erro para debug
-            if (error.response?.status === 401) {
-              this.logger.warn(`Erro 401 ao buscar em ${endpoint} - autenticação falhou`);
-            } else if (error.response?.status === 404) {
-              this.logger.debug(`Endpoint ${endpoint} não encontrado (404)`);
-            } else {
-              this.logger.debug(`Erro ao buscar em ${endpoint} com query ${query}: ${error.message}`);
-            }
-            // Continuar para próxima query/endpoint
-          }
-        }
+      if (items.length > 0 && items[0].RequesterEmail) {
+        const email = items[0].RequesterEmail;
+        this.logger.log(`✅ Email encontrado em PR anterior: ${email}`);
+        return email;
       }
 
-      this.logger.warn(`❌ Email não encontrado para o usuário: ${userName}`);
+      this.logger.log(`⚠️ Nenhuma PR anterior encontrada para ${normalizedName}`);
       return null;
 
     } catch (error) {
-      this.logger.error(`Erro ao buscar email do usuário ${userName}: ${error.message}`);
-      
-      if (error.response?.status === 404) {
-        return null;
-      }
-
-      // Não lançar erro, apenas retornar null para não quebrar o fluxo
+      this.logger.debug(`Erro ao buscar em PRs anteriores: ${error.message}`);
       return null;
     }
   }

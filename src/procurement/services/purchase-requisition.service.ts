@@ -5,6 +5,7 @@ import { ItemLookupService } from '../../fusion/item-lookup.service';
 import { OrganizationLookupService } from '../../fusion/organization-lookup.service';
 import { FusionService } from '../../fusion/fusion.service';
 import { UserLookupService } from '../../fusion/user-lookup.service';
+import { SupplierLookupService } from '../../fusion/supplier-lookup.service';
 import axios, { AxiosInstance } from 'axios';
 import { CreatePurchaseRequisitionDto } from '../dto/create-purchase-requisition.dto';
 
@@ -28,6 +29,7 @@ export class PurchaseRequisitionService {
     private readonly organizationLookupService: OrganizationLookupService,
     private readonly fusionService: FusionService,
     private readonly userLookupService: UserLookupService,
+    private readonly supplierLookupService: SupplierLookupService,
   ) {
     this.baseUrl = this.configService.get<string>('FUSION_BASE_URL') || '';
     if (!this.baseUrl) {
@@ -294,6 +296,44 @@ export class PurchaseRequisitionService {
       this.logger.log(`📧 Usando email padrão: ${requesterEmail} [${operationId}]`);
     }
 
+    // Buscar fornecedor cadastrado no Oracle (se fornecido CNPJ)
+    let supplierData: {
+      SupplierId?: number;
+      SupplierSiteId?: number;
+      SupplierName?: string;
+      useSuggested: boolean;
+    } = { useSuggested: false };
+
+    if (dto.supplierCNPJ) {
+      // Buscar por CNPJ (nome é opcional, usado apenas para log/sugestão)
+      const searchName = dto.supplierName || dto.supplierCNPJ;
+      this.logger.log(`🔍 Buscando fornecedor cadastrado por CNPJ: ${dto.supplierCNPJ} [${operationId}]`);
+      
+      try {
+        const supplierInfo = await this.supplierLookupService.findSupplierAndSite(
+          searchName,
+          dto.supplierCNPJ,
+        );
+
+        if (supplierInfo) {
+          supplierData = {
+            SupplierId: supplierInfo.supplier.SupplierId,
+            SupplierSiteId: supplierInfo.site?.SupplierSiteId,
+            SupplierName: supplierInfo.supplier.SupplierName,
+            useSuggested: false,
+          };
+          this.logger.log(`✅ Fornecedor cadastrado encontrado - ID: ${supplierData.SupplierId}, Site: ${supplierData.SupplierSiteId || 'N/A'} [${operationId}]`);
+        } else {
+          // Fornecedor não cadastrado - usar modo sugerido
+          supplierData.useSuggested = true;
+          this.logger.log(`⚠️ Fornecedor não cadastrado - usando modo sugerido [${operationId}]`);
+        }
+      } catch (error) {
+        this.logger.warn(`⚠️ Erro ao buscar fornecedor, usando modo sugerido: ${error.message} [${operationId}]`);
+        supplierData.useSuggested = true;
+      }
+    }
+
     // Payload corrigido baseado nos erros documentados
     const deliverToLocationCode = dto.deliveryLocation || orgData.locationCode;
 
@@ -352,13 +392,26 @@ export class PurchaseRequisitionService {
           // SOLICITANTE - RequesterEmail é obrigatório
           RequesterEmail: requesterEmail,
           
-          // FORNECEDOR SUGERIDO - Usar formato completo "NOME - CNPJ"
-          // NewSupplierFlag=true permite sugerir fornecedor sem cadastro prévio na BU
-          ...(dto.supplierName && dto.supplierCNPJ && {
-            NewSupplierFlag: true,
-            SuggestedSupplier: `${dto.supplierName} - ${dto.supplierCNPJ}`,
-            SuggestedSupplierSite: dto.supplierSite || dto.supplierCNPJ,
-          }),
+          // FORNECEDOR
+          // IMPORTANTE: Usar APENAS SupplierId OU SuggestedSupplier, NUNCA os dois juntos
+          // Fornecedor cadastrado: envia SupplierId + SupplierSiteId (aparece em "Source")
+          // Fornecedor não cadastrado: envia SuggestedSupplier (aparece como novo)
+          ...(supplierData.SupplierId 
+            ? {
+                // Fornecedor CADASTRADO - usar apenas IDs
+                SupplierId: supplierData.SupplierId,
+                ...(supplierData.SupplierSiteId && { SupplierSiteId: supplierData.SupplierSiteId }),
+              }
+            : supplierData.useSuggested && dto.supplierName && dto.supplierCNPJ
+              ? {
+                  // Fornecedor NÃO CADASTRADO - usar modo sugerido
+                  // IMPORTANTE: Enviar APENAS o supplierName, pois ele já pode conter o CNPJ
+                  NewSupplierFlag: true,
+                  SuggestedSupplier: dto.supplierName,
+                  SuggestedSupplierSite: dto.supplierSite || dto.supplierCNPJ,
+                }
+              : {}
+          ),
           
           // DISTRIBUIÇÕES CONTÁBEIS
           // ESTRATÉGIA: Incluir ChargeAccount DIRETAMENTE no payload inicial
