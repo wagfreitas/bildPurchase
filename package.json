@@ -10,6 +10,8 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "build": "nest build",
+    "build:oci": "npm run build && npm run dist:prune",
+    "dist:prune": "node scripts/prune-dist.js",
     "format": "prettier --write .",
     "test": "jest",
     "test:watch": "jest --watch",

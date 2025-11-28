@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 export interface SystemMetrics {
   system: {
@@ -10,12 +11,29 @@ export interface SystemMetrics {
   };
 }
 
+export interface EnvironmentInfo {
+  nodeEnv: string;
+  appEnv: string;
+  fusionBaseUrl: string;
+  fusionRestVersion: string;
+  fusionUsername: string;
+}
+
+export interface HealthCheckResponse {
+  status: 'healthy' | 'unhealthy';
+  checks: {
+    fusion: 'healthy' | 'unhealthy';
+  };
+  environment: EnvironmentInfo;
+  timestamp: string;
+}
+
 @Injectable()
 export class ObservabilityService {
   private readonly logger = new Logger(ObservabilityService.name);
   private readonly startTime = Date.now();
 
-  constructor() {}
+  constructor(private readonly configService: ConfigService) {}
 
   async getSystemMetrics(): Promise<SystemMetrics> {
     try {
@@ -95,13 +113,7 @@ export class ObservabilityService {
     });
   }
 
-  async getHealthCheck(): Promise<{
-    status: 'healthy' | 'unhealthy';
-    checks: {
-      fusion: 'healthy' | 'unhealthy';
-    };
-    timestamp: string;
-  }> {
+  async getHealthCheck(): Promise<HealthCheckResponse> {
     const checks = {
       fusion: await this.checkFusionHealth(),
     };
@@ -113,7 +125,18 @@ export class ObservabilityService {
     return {
       status: overallStatus,
       checks,
+      environment: this.getEnvironmentInfo(),
       timestamp: new Date().toISOString(),
+    };
+  }
+
+  private getEnvironmentInfo(): EnvironmentInfo {
+    return {
+      nodeEnv: this.configService.get<string>('NODE_ENV') || 'development',
+      appEnv: this.configService.get<string>('APP_ENV') || 'unknown',
+      fusionBaseUrl: this.configService.get<string>('FUSION_BASE_URL') || 'not-set',
+      fusionRestVersion: this.configService.get<string>('FUSION_REST_VERSION') || 'not-set',
+      fusionUsername: this.configService.get<string>('FUSION_USERNAME') || 'not-set',
     };
   }
 

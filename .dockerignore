@@ -50,6 +50,7 @@ docs/
 
 # Scripts de desenvolvimento
 scripts/
+!scripts/prune-dist.js
 
 # Fusion minimal (removido)
 fusion-requisition-minimal-nestjs/

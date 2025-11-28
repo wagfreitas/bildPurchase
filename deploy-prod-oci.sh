@@ -7,7 +7,7 @@ COMPARTMENT_ID="ocid1.compartment.oc1..aaaaaaaa6c2vhi5f4f4lsz6h4y3qqhxuu3s3hh4tf
 SUBNET_ID="ocid1.subnet.oc1.sa-saopaulo-1.aaaaaaaa7ucdeyn72b4bgleiwbhmbtfqujzutttyb52jqgcncdw7w7h2snua"
 AVAILABILITY_DOMAIN="iQRo:SA-SAOPAULO-1-AD-1"
 PROJECT_NAME="purchase-oracle-integration-prod"
-IMAGE_URL="sa-saopaulo-1.ocir.io/grzaximzipxi/purchase-oracle-integration-prod:v1.0.0"
+IMAGE_URL="sa-saopaulo-1.ocir.io/grzaximzipxi/purchase-oracle-integration-prod:v1.0.5"
 NAMESPACE="grzaximzipxi"
 OCI_USERNAME="automacao.csc@bild.com.br"
 
@@ -40,7 +40,7 @@ oci container-instances container-instance create \
     "image-url":"'"${IMAGE_URL}"'",
     "environment-variables":{
       "NODE_ENV":"production",
-      "PORT":"3000",
+      "PORT":"8080",
       "FUSION_BASE_URL":"https://fa-evvi-saasfaprod1.fa.ocs.oraclecloud.com",
       "FUSION_REST_VERSION":"11.13.18.05",
       "FUSION_USERNAME":"automacao.csc@bild.com.br",

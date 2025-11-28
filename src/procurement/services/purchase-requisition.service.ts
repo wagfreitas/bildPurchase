@@ -9,6 +9,14 @@ import { SupplierLookupService } from '../../fusion/supplier-lookup.service';
 import axios, { AxiosInstance } from 'axios';
 import { CreatePurchaseRequisitionDto } from '../dto/create-purchase-requisition.dto';
 
+type SupplierMetadata = {
+  SupplierId?: number;
+  SupplierSiteId?: number;
+  SupplierSiteCode?: string;
+  SupplierName?: string;
+  useSuggested: boolean;
+};
+
 /**
  * Serviço para criar Purchase Requisitions no Oracle Fusion
  * 
@@ -105,7 +113,12 @@ export class PurchaseRequisitionService {
       this.logger.log(`✅ Item ${dto.itemNumber} habilitado (ItemId: ${item.ItemId}) [${operationId}]`);
 
       // 3. Preparar o payload da Purchase Requisition com dados corretos
-      const payload = await this.buildPurchaseRequisitionPayload(dto, item, orgData, operationId);
+      const { payload, supplierData } = await this.buildPurchaseRequisitionPayload(
+        dto,
+        item,
+        orgData,
+        operationId,
+      );
 
       // 4. Criar a Purchase Requisition na Oracle
       const authHeader = this.authService.getBasicAuthHeader();
@@ -192,6 +205,55 @@ export class PurchaseRequisitionService {
         this.logger.log(`⏸️  Auto-submit desabilitado - requisição criada mas não submetida [${operationId}]`);
       }
 
+      const parseNumericValue = (value: any): number | undefined => {
+        if (typeof value === 'number') {
+          return value;
+        }
+        if (typeof value === 'string') {
+          const trimmed = value.trim();
+          if (!trimmed) {
+            return undefined;
+          }
+          if (trimmed.includes(',') && trimmed.includes('.')) {
+            const sanitized = trimmed.replace(/\./g, '').replace(',', '.');
+            const parsed = parseFloat(sanitized);
+            return isNaN(parsed) ? undefined : parsed;
+          }
+          if (trimmed.includes(',')) {
+            const sanitized = trimmed.replace(',', '.');
+            const parsed = parseFloat(sanitized);
+            return isNaN(parsed) ? undefined : parsed;
+          }
+          const parsed = parseFloat(trimmed);
+          return isNaN(parsed) ? undefined : parsed;
+        }
+        return undefined;
+      };
+
+      const firstLine = Array.isArray(response.data.lines) ? response.data.lines[0] : null;
+      const supplierNameFromResponse = firstLine?.Supplier || firstLine?.SupplierName || firstLine?.SuggestedSupplier;
+      const supplierSiteFromResponse = firstLine?.SupplierSite || firstLine?.SupplierSiteName || firstLine?.SuggestedSupplierSite;
+      const supplierSummary = {
+        id: firstLine?.SupplierId ?? supplierData.SupplierId ?? null,
+        name: supplierNameFromResponse || supplierData.SupplierName || dto.supplierName || dto.supplierCNPJ || null,
+        siteId: firstLine?.SupplierSiteId ?? supplierData.SupplierSiteId ?? null,
+        site: supplierSiteFromResponse || supplierData.SupplierSiteCode || dto.supplierSite || dto.supplierCNPJ || null,
+        isSuggested: supplierData.useSuggested && !supplierData.SupplierId,
+      };
+
+      const dtoUnitPrice = parseNumericValue(dto.price);
+      const dtoQuantity = typeof dto.quantity === 'number' ? dto.quantity : parseNumericValue(dto.quantity);
+      const resolvedUnitPrice = parseNumericValue(firstLine?.Price) ?? dtoUnitPrice ?? 0;
+      const resolvedQuantity = parseNumericValue(firstLine?.Quantity) ?? dtoQuantity ?? 1;
+      const responseAmount = parseNumericValue(firstLine?.Amount) ?? parseNumericValue(firstLine?.LineAmount);
+      const totalAmount = responseAmount ?? Number((resolvedUnitPrice * resolvedQuantity).toFixed(2));
+      const amountSummary = {
+        currency: firstLine?.CurrencyCode || dto.currencyCode || 'BRL',
+        unitPrice: Number(resolvedUnitPrice),
+        quantity: Number(resolvedQuantity),
+        total: Number(totalAmount),
+      };
+
       return {
         operationId,
         success: true,
@@ -202,6 +264,12 @@ export class PurchaseRequisitionService {
           status: submissionResult ? 'Pending Approval' : response.data.DocumentStatus,
           statusCode: submissionResult ? 'PENDING_APPROVAL' : response.data.DocumentStatusCode,
           businessUnit: response.data.RequisitioningBU,
+          supplierId: supplierSummary.id,
+          supplierName: supplierSummary.name,
+          supplierSiteId: supplierSummary.siteId,
+          supplierSite: supplierSummary.site,
+          supplierIsSuggested: supplierSummary.isSuggested,
+          amount: amountSummary,
           preparer: response.data.Preparer,
           description: response.data.Description,
           createdDate: response.data.CreationDate,
@@ -248,7 +316,7 @@ export class PurchaseRequisitionService {
     item: any,
     orgData: any,
     operationId: string,
-  ): Promise<any> {
+  ): Promise<{ payload: any; supplierData: SupplierMetadata }> {
     // Converter preço de string para número (trocar vírgula por ponto)
     const price = parseFloat(dto.price.replace(',', '.'));
     const quantity = dto.quantity || 1;
@@ -297,12 +365,7 @@ export class PurchaseRequisitionService {
     }
 
     // Buscar fornecedor cadastrado no Oracle (se fornecido CNPJ)
-    let supplierData: {
-      SupplierId?: number;
-      SupplierSiteId?: number;
-      SupplierName?: string;
-      useSuggested: boolean;
-    } = { useSuggested: false };
+    let supplierData: SupplierMetadata = { useSuggested: false };
 
     if (dto.supplierCNPJ) {
       // Buscar por CNPJ (nome é opcional, usado apenas para log/sugestão)
@@ -319,6 +382,7 @@ export class PurchaseRequisitionService {
           supplierData = {
             SupplierId: supplierInfo.supplier.SupplierId,
             SupplierSiteId: supplierInfo.site?.SupplierSiteId,
+            SupplierSiteCode: supplierInfo.site?.SupplierSiteCode,
             SupplierName: supplierInfo.supplier.SupplierName,
             useSuggested: false,
           };
@@ -455,7 +519,7 @@ export class PurchaseRequisitionService {
       this.logger.warn(`⚠️  NENHUMA DISTRIBUIÇÃO ENCONTRADA NO PAYLOAD [${operationId}]`);
     }
 
-    return payload;
+    return { payload, supplierData };
   }
 
   /**

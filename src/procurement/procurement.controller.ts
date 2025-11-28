@@ -281,6 +281,11 @@ export class ProcurementController {
             requisitionNumber: result.requisition.requisitionNumber,
             requisitionId: result.requisition.requisitionId,
             status: result.requisition.status,
+            businessUnit: result.requisition.businessUnit,
+            supplier: result.requisition.supplierName,
+            supplierSite: result.requisition.supplierSite,
+            amount: result.requisition.amount?.total ?? null,
+            currency: result.requisition.amount?.currency ?? null,
           });
           successCount++;
         } catch (error: any) {

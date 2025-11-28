@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { ObservabilityService, SystemMetrics } from './observability.service';
+import { ObservabilityService, SystemMetrics, HealthCheckResponse } from './observability.service';
 
 @ApiTags('observability')
 @Controller('observability')
@@ -17,7 +17,7 @@ export class ObservabilityController {
   @Get('health')
   @ApiOperation({ summary: 'Get system health status' })
   @ApiResponse({ status: 200, description: 'Health check results' })
-  async getHealth() {
+  async getHealth(): Promise<HealthCheckResponse> {
     return await this.observabilityService.getHealthCheck();
   }
 }
